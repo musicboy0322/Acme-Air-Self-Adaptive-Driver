@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from Monitor import Monitor
 from Analyzer import Analyzer
+from Planar import Planar
 from utils import init_csv, append_to_csv
 
 def main():
@@ -75,6 +76,7 @@ def main():
     # initialize component
     monitor = Monitor(URL, APIKEY, GUID, SLEEP)
     analyzer = Analyzer(analyze_metrics, service_to_use)
+    planer = Planer()
 
     # start moitor and analyze
     while True:
@@ -90,11 +92,14 @@ def main():
         
         # analyzing
         print("Analyzing metrics from IBM Cloud ...")
-        analyzer.process_data(data_dict)
+        analysis_results = analyzer.process_data(data_dict)
 
         # write in CSV file
         timestamp = datetime.now().isoformat()
         append_to_csv(csv_file, timestamp, data_dict, service_to_use)
+
+        # planing
+        print(planer.evaluate_services(analysis_results))
 
         # wait for nex round
         time.sleep(SLEEP)

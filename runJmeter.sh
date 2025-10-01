@@ -7,7 +7,7 @@ fi
 HOST=$(oc get route acmeair-main-route -n acmeair-group${GROUP} --template='{{ .spec.host }}')
 PORT=80
 
-THREAD=10
+THREAD=500
 USER=999
 DURATION=60
 RAMP=0
@@ -28,7 +28,7 @@ echo ""
 curl http://${HOST}/customer/loader/load?numCustomers=10000
 echo ""
 
-jmeter -n -t acmeair-jmeter/scripts/AcmeAir-microservices-mpJwt.jmx \
+jmeter -n -t scripts/AcmeAir-microservices-mpJwt.jmx \
  -DusePureIDs=true \
  -JHOST=${HOST} \
  -JPORT=${PORT} \
