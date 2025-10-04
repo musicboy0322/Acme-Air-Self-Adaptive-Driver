@@ -76,7 +76,7 @@ def main():
     # initialize component
     monitor = Monitor(URL, APIKEY, GUID, SLEEP)
     analyzer = Analyzer(analyze_metrics, service_to_use)
-    planer = Planer()
+    planar = Planar()
 
     # start moitor and analyze
     while True:
@@ -99,7 +99,7 @@ def main():
         append_to_csv(csv_file, timestamp, data_dict, service_to_use)
 
         # planing
-        print(planer.evaluate_services(analysis_results))
+        print(planar.evaluate_services(analysis_results))
 
         # wait for nex round
         time.sleep(SLEEP)
