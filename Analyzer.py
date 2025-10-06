@@ -20,29 +20,25 @@ class Analyzer:
         result = {
             "cpu": cpu,
             "memory": memory,
-            "lantency": latency,
+            "latency": latency,
             "errors": errors,
             "gc_time": gc_time,
-            "need_adapation": False,
-            "system_busy": False,
-            "reason": None
+            "adaptation": []
         }
 
         # Check if adaptation is needed
-        if (cpu > self.cpu_threshold_high or 
-            memory > self.memory_threshold_high or 
-            latency > self.latency_threshold or 
-            errors > self.error_threshold or
-            gc_time > 2000):
-            # Need adaptation, system is busy
-            result["need_adaptation"] = True
-            result["system_busy"] = True
-            result["reason"] = "overloaded"  
+        if cpu > self.cpu_threshold_high:
+            result["adaptation"].append("increase cpu")
+        if memory > self.memory_threshold_high or gc_time > 2000:
+            result["adaptation"].append("increase memory")
+        if latency > self.latency_threshold:
+            result["adaptation"].append("increase replica")
         elif cpu < self.cpu_threshold_low and memory < self.memory_threshold_low:
-            # Need adaptation, system is underutilized
-            result["need_adaptation"] = True
-            result["system_busy"] = False
-            result["reason"] = "underutilization" 
+            result["adaptation"].append("decrease replica")
+        elif cpu < self.cpu_threshold_low:
+            result["adaptation"].append("decrease cpu")
+        elif memory < self.memory_threshold_low:
+            result["adaptation"].append("decrease memory")
         return result
 
     def _create_dataframe(self, data):

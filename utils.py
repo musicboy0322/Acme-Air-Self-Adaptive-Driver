@@ -33,7 +33,7 @@ def append_to_csv(csv_file, timestamp, data_dict, service_to_use):
         ("memory.limit.used.percent", "avg"): "memory.limit.used.percent",
         ("jvm.heap.used.percent", "avg"): "jvm.heap.used.percent",
         ("jvm.gc.global.time", "avg"): "jvm.gc.global.time",
-        ("kubernetes.deployment.replicas.available", "avg"): "kubernetes.deployment.replicas.available",
+        ("kubernetes.deployment.replicas.available", "max"): "kubernetes.deployment.replicas.available",
         ("net.http.request.time", "max"): "net.http.request.time",
         ("net.request.count.in", "sum"): "net.request.count.in",
         ("net.http.error.count", "sum"): "net.http.error.count",
@@ -42,7 +42,7 @@ def append_to_csv(csv_file, timestamp, data_dict, service_to_use):
         ("net.bytes.out", "max"): "net.bytes.out",
         ("net.bytes.total", "max"): "net.bytes.total",
         ("jvm.nonHeap.used.percent", "avg"): "jvm.nonHeap.used.percent",
-        ("jvm.thread.count", "sum"): "jvm.thread.count",
+        ("jvm.thread.count", "max"): "jvm.thread.count",
         ("jvm.gc.global.count", "sum"): "jvm.gc.global.count"
     }
 

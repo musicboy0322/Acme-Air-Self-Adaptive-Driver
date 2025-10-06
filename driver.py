@@ -8,26 +8,26 @@ from dotenv import load_dotenv
 
 from Monitor import Monitor
 from Analyzer import Analyzer
-from Planar import Planar
+from Planner import Planner
+from Executor import Executor
 from utils import init_csv, append_to_csv
 
 def main():
-
-    # create a CSV file for the dataset
+    # Create a CSV file for the dataset
     csv_file = "datasets/metrics_dataset.csv"
     if not os.path.exists('datasets'):
         os.mkdir('datasets')
 
-    # read .env file
+    # Read .env file
     load_dotenv()
 
-    # initilaze parameter
+    # Initialize parameters
     GUID = os.getenv("GUID")
     APIKEY = os.getenv("APIKEY")
     URL = os.getenv("URL")
     SLEEP = int(os.getenv("SLEEP"))
 
-    # target service
+    # Target service
     service_to_use = [
         "acmeair-mainservice",
         "acmeair-authservice",
@@ -35,8 +35,9 @@ def main():
         "acmeair-customerservice",
         "acmeair-bookingservice"
     ]
+    current_configs = {svc: {"cpu": 500, "memory": 512, "replica": 1} for svc in service_to_use}
 
-    # metrics settings
+    # Metrics settings
     monitor_metrics = [
         # avg
         ("jvm.heap.used.percent", "avg"),
@@ -70,17 +71,24 @@ def main():
         #("net.request.count.in", "sum"),
     ]
 
-    # initialize CSV file
+    # Initialize CSV file
     init_csv(csv_file)
     
-    # initialize component
+    # Initialize components
     monitor = Monitor(URL, APIKEY, GUID, SLEEP)
     analyzer = Analyzer(analyze_metrics, service_to_use)
-    planar = Planar()
+    planner = Planner()
+    executor = Executor()
 
-    # start moitor and analyze
+    print("Starting MAPE-K adaptation loop...")
+    cycle_count = 0
+
+    # Start monitor and analyze
     while True:
-        # monitoring
+        cycle_count += 1
+        print(f"\n=== Adaptation Cycle {cycle_count} ===")
+        
+        # MONITOR: Collect metrics
         print("Monitoring metrics from IBM Cloud ...")
         data_dict = {}
         for metric, agg in monitor_metrics:
@@ -90,16 +98,26 @@ def main():
             else:
                 print(f"Failed to fetch {metric} with {agg} aggregation")
         
-        # analyzing
-        print("Analyzing metrics from IBM Cloud ...")
+        # ANALYZE: Process metrics
+        print("Analyzing metrics ...")
         analysis_results = analyzer.process_data(data_dict)
 
-        # write in CSV file
+        # PLAN: Generate adaptation decisions
+        print("Planning adaptations ...")
+        decisions, new_configs = planner.evaluate_services(analysis_results, current_configs)
+
+        # EXECUTE: Apply adaptations
+        print("Executing adaptations ...")
+        success = executor.execute_plan(decisions, current_configs)
+        if success:
+            print("Successfully executed adaptation")
+            current_configs = new_configs
+        else:
+            print("Failed to execute adaptation")
+
+        # KNOWLEDGE: Store data with adaptation information
         timestamp = datetime.now().isoformat()
         append_to_csv(csv_file, timestamp, data_dict, service_to_use)
-
-        # planing
-        print(planar.evaluate_services(analysis_results))
 
         # wait for nex round
         time.sleep(SLEEP)
