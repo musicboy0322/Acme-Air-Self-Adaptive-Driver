@@ -3,16 +3,22 @@ import json
 import pandas as pd
 
 class Analyzer:
-    def __init__(self, analyze_metrics, service_to_use):
+    def __init__(self, analyze_metrics, service_to_use, thresholds, weights):
         self.metrics = analyze_metrics
         self.services = service_to_use
         
-        self.cpu_threshold_high = 80
-        self.cpu_threshold_low = 20
-        self.memory_threshold_high = 80
-        self.memory_threshold_low = 20
-        self.latency_threshold = 2e7
-        self.error_threshold = 5
+        self.cpu_threshold_high = thresholds["cpu"]["high"]
+        self.cpu_threshold_low = thresholds["cpu"]["low"]
+        self.memory_threshold_high = thresholds["memory"]["high"]
+        self.memory_threshold_low = thresholds["memory"]["low"]
+        self.latency_avg_threshold = thresholds["latency"]["avg"]
+        self.latency_max_threshold = thresholds["latency"]["max"]
+        self.error_rate_threshold = thresholds["error_rate"]
+
+        self.cpu_weight = weights["cpu"]
+        self.memory_weight = weights["memory"]
+        self.latency_weight = weights["latency"]
+        self.error_rate_weight = weights["error_rate"]
 
     def evaluate_metrics(self, cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time):
         print(f"""
@@ -26,7 +32,8 @@ class Analyzer:
             Error Rate: {error_rate:.2f}%
             GC Time: {gc_time / 1000:.2f} ms
         """)
-        
+
+        unhealty_metrics = []
         result = {
             "cpu": cpu,
             "memory": memory,
@@ -37,22 +44,42 @@ class Analyzer:
             "request_byte_total": request_byte_total,
             "error_rate": error_rate,
             "gc_time": gc_time,
-            "adaptation": []
+            "adaptation": "",
+            "unhealthy_metrics": unhealthy_metrics
         }
 
-        # Check if adaptation is needed
+        # analyze global health
+        cpu_utility = self._normalize_high_is_good(self.cpu_threshold_low, self.cpu_threshold_high, cpu)
+        memory_utility = self._normalize_high_is_good(self.memory_threshold_low, self.memory_threshold_high, memory)
+        latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg)
+        error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate)
+        overall_utility = cpu_utility * self.cpu_weight + memory_utility * self.memory_weight + latency_utility * self.latency_weight + error_rate_utility * self.error_rate_weight
+
+        # analyze local health
         if cpu > self.cpu_threshold_high:
-            result["adaptation"].append("increase cpu")
-        if memory > self.memory_threshold_high or gc_time > 2000:
-            result["adaptation"].append("increase memory")
-        if latency_max > self.latency_threshold:
-            result["adaptation"].append("increase replica")
-        elif cpu < self.cpu_threshold_low and memory < self.memory_threshold_low:
-            result["adaptation"].append("decrease replica")
+            unhealty_metrics.append("cpu_threshold_high")
         elif cpu < self.cpu_threshold_low:
-            result["adaptation"].append("decrease cpu")
-        elif memory < self.memory_threshold_low:
-            result["adaptation"].append("decrease memory")
+            unhealty_metrics.append("cpu_threshold_low")
+
+        if memory > self.memory_threshold_high:
+            unhealty_metrics.append("memory_threshold_high")
+        elif memort < self.memory_threshold_low:
+            unhealty_metrics.append("memory_threshold_low")
+        
+        if lantency_avg > self.latency_avg_threshold:
+            unhealty_metrics.append("latency_avg_threshold")
+        
+        if error_rate > self.error_rate_threshold:
+            unhealty_metrics.append("error_rate_threshold")
+
+        # analyze system health
+        if overall_utility >= 0.8 and len(unhealthy_metrics) == 0:
+            result["adaptation"] = "healthy"
+        elif overall_utility < 0.5 or len(unhealthy_metrics) >= 2:
+            result["adaptation"] = "unhealthy"
+        else:
+            result["adaptation"] = "warning"
+
         return result
 
     def _create_dataframe(self, data):
@@ -104,3 +131,10 @@ class Analyzer:
             analysis_results[svc] = result
 
         return analysis_results
+
+    def _normalize_high_is_good(self, low, high, value):
+        return (value - low) / (high - low)
+    
+    def _normalize_low_is_good(self, high, value):
+        return max(0.0, 1.0 - min(value / high, 1.0))
+    

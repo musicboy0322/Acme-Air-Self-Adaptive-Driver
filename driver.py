@@ -22,10 +22,10 @@ def main():
     load_dotenv()
 
     # Initialize parameters
-    GUID = os.getenv("GUID")
-    APIKEY = os.getenv("APIKEY")
-    URL = os.getenv("URL")
-    SLEEP = int(os.getenv("SLEEP"))
+    guid = os.getenv("GUID")
+    apikey = os.getenv("APIKEY")
+    url = os.getenv("URL")
+    sleep = int(os.getenv("SLEEP"))
 
     # Target service
     service_to_use = [
@@ -82,8 +82,9 @@ def main():
     init_csv(csv_file)
     
     # Initialize components
-    monitor = Monitor(URL, APIKEY, GUID, SLEEP)
-    analyzer = Analyzer(analyze_metrics, service_to_use)
+    knowledge = Knowledge("./knowledge.json")
+    monitor = Monitor(url, apikey, guid, sleep)
+    analyzer = Analyzer(analyze_metrics, service_to_use, knowledge.get_threshold, knowledge.get_weight)
     planner = Planner()
     executor = Executor()
 
