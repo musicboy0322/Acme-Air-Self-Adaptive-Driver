@@ -14,14 +14,28 @@ class Analyzer:
         self.latency_threshold = 2e7
         self.error_threshold = 5
 
-    def evaluate_metrics(self, cpu, memory, latency, errors, gc_time):
-        print(f"CPU: {cpu:.2f}%, Memory: {memory:.2f}%, Latency: {latency/1000000:.2f}s, Errors: {errors}, GC time: {gc_time/1000:.2f}ms")
+    def evaluate_metrics(self, cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time):
+        print(f"""
+            CPU: {cpu:.2f}%
+            Memory: {memory:.2f}%
+            Latency (avg): {latency_avg/1000000:.2f} ms
+            Latency (max): {latency_max/1000000:.2f} ms
+            Request Count: {request_count:.2f}
+            RPS: {request_per_second:.2f}
+            Request Byte Total: {request_byte_total*1.024/1000:.2f} KB/s
+            Error Rate: {error_rate:.2f}%
+            GC Time: {gc_time / 1000:.2f} ms
+        """)
         
         result = {
             "cpu": cpu,
             "memory": memory,
-            "latency": latency,
-            "errors": errors,
+            "latency_avg": latency_avg,
+            "latency_max": latency_max,
+            "request_count": request_count,
+            "request_per_second": request_per_second,
+            "request_byte_total": request_byte_total,
+            "error_rate": error_rate,
             "gc_time": gc_time,
             "adaptation": []
         }
@@ -31,7 +45,7 @@ class Analyzer:
             result["adaptation"].append("increase cpu")
         if memory > self.memory_threshold_high or gc_time > 2000:
             result["adaptation"].append("increase memory")
-        if latency > self.latency_threshold:
+        if latency_max > self.latency_threshold:
             result["adaptation"].append("increase replica")
         elif cpu < self.cpu_threshold_low and memory < self.memory_threshold_low:
             result["adaptation"].append("decrease replica")
@@ -60,20 +74,32 @@ class Analyzer:
             df_filtered = df[df['service'].isin(self.services)]
             avg_values = df_filtered.groupby('service')['value'].mean()
 
+            metric_name = f"{metric_id}_{aggregation}"
+
             for svc, val in avg_values.items():
-                outputs[svc][metric_id] = val
+                outputs[svc][metric_name] = val
 
         for svc, metric_values in outputs.items():
             print("//////////////////////////////////////////")
             print(f"Service: {svc}")
 
-            cpu = metric_values.get("cpu.quota.used.percent", 0)
-            mem = metric_values.get("memory.limit.used.percent", 0)
-            latency = metric_values.get("net.http.request.time", 0)
-            errors = metric_values.get("net.http.error.count", 0)
-            gc_time = metric_values.get("jvm.gc.global.time", 0)
+            # Latency
+            latency_avg = metric_values.get("net.request.time.in_avg", 0)
+            latency_max = metric_values.get("net.request.time.in_max", 0)
+            # Traffic
+            request_count = metric_values.get("net.request.count.in_sum", 0)
+            request_per_second = metric_values.get("net.request.count.in_sum", 0) / 10
+            request_byte_total = metric_values.get("net.bytes.total_sum", 0)
+            # Errors
+            errors = metric_values.get("net.http.error.count_sum", 0)
+            error_rate = errors / request_count if request_count else 0
+            # Saturation
+            cpu = metric_values.get("cpu.quota.used.percent_avg", 0)
+            memory = metric_values.get("memory.limit.used.percent_avg", 0)
+            # Other
+            gc_time = metric_values.get("jvm.gc.global.time_avg", 0)
 
-            result = self.evaluate_metrics(cpu, mem, latency, errors, gc_time)
+            result = self.evaluate_metrics(cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time)
             result["service"] = svc
             analysis_results[svc] = result
 

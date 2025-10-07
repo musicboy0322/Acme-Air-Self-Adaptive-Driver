@@ -59,7 +59,7 @@ echo "Replica: $replica"
 echo "Service: $service"
 
 # Define the list of yaml files
-files=("deploy-acmeair-mainservice-java.yaml" "deploy-acmeair-authservice-java.yaml" "deploy-acmeair-flightservice-java.yaml" "deploy-acmeair-customerservice-java.yaml" "deploy-acmeair-bookingservice-java.yaml")
+files=("microservices/deploy-acmeair-mainservice-java.yaml" "microservices/deploy-acmeair-authservice-java.yaml" "microservices/deploy-acmeair-flightservice-java.yaml" "microservices/deploy-acmeair-customerservice-java.yaml" "microservices/deploy-acmeair-bookingservice-java.yaml")
 
 # Iterate over the services
 for file in "${files[@]}"; do

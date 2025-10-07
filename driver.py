@@ -45,6 +45,7 @@ def main():
         ("jvm.nonHeap.used.percent", "avg"),
         ("cpu.quota.used.percent", "avg"),
         ("memory.limit.used.percent", "avg"),
+        ("net.request.time.in", "avg"),
         # max
         ("jvm.thread.count", "max"),
         ("net.http.request.time", "max"),
@@ -57,18 +58,24 @@ def main():
         ("jvm.gc.global.count", "sum"),
         ("net.request.count.in", "sum"),
         ("net.http.error.count", "sum"),
+        ("net.bytes.total", "sum"),
     ]
 
     analyze_metrics = [
-        # avg
-        ("jvm.gc.global.time", "avg"),
+        # Four Golden Signals
+        # Latency
+        ("net.request.time.in", "avg"),
+        ("net.request.time.in", "max"),
+        # Traffic
+        ("net.request.count.in", "sum"),
+        ("net.bytes.total", "sum"),
+        # Errors
+        ("net.http.error.count", "sum"),
+        # Saturation
         ("cpu.quota.used.percent", "avg"),
         ("memory.limit.used.percent", "avg"),
-        # max
-        ("net.http.request.time", "max"),
-        # sum
-        ("net.http.error.count", "sum"),
-        #("net.request.count.in", "sum"),
+        # Other
+        ("jvm.gc.global.time", "avg"),
     ]
 
     # Initialize CSV file
