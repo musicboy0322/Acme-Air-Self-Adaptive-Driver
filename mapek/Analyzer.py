@@ -63,10 +63,10 @@ class Analyzer:
 
         if memory > self.memory_threshold_high:
             unhealty_metrics.add("memory_high")
-        elif memort < self.memory_threshold_low:
+        elif memory < self.memory_threshold_low:
             unhealty_metrics.add("memory_low")
         
-        if lantency_avg > self.latency_avg_threshold:
+        if latency_avg > self.latency_avg_threshold:
             unhealty_metrics.add("latency_avg_high")
         
         if error_rate > self.error_rate_threshold:

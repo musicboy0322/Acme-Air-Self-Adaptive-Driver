@@ -23,10 +23,10 @@ class Planner:
         new_config = config.copy()  # Don't modify original
         adaptations = []
 
-        if analysis_result["adaptation"]:
+        if analysis_result["adaptation"] != "healthy":
             unhealthy_metrics = analysis_result["unhealthy_metrics"]
 
-            ## Vertical Scaling & Scal Down
+            ## Vertical Scale Up & Scale Down
 
             # situation of increasing cpu
             if "cpu_high" in unhealthy_metrics and "latency_avg_high" in unhealthy_metrics:
@@ -60,8 +60,8 @@ class Planner:
                     new_config["memory"] = min(new_config["memory"] - 256, self.min_memory)
                     adaptations.append("decrease_cpu")
 
-            ## Horizontal Scaling & Scal Down
-
+            ## Horizontal Scale Up & Scale Down
+            
             # situation of increasing replica
             if (("latency_avg_high" in unhealthy_metrics or "error_rate_high" in unhealthy_metrics) and 
                 ("cpu_high" in unhealthy_metrics or "memory_high" in unhealthy_metrics)):
