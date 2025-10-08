@@ -6,10 +6,10 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from Monitor import Monitor
-from Analyzer import Analyzer
-from Planner import Planner
-from Executor import Executor
+from ./mapek/Monitor import Monitor
+from ./mapek/Analyzer import Analyzer
+from ./mapek/Planner import Planner
+from ./mapek/Executor import Executor
 from utils import init_csv, append_to_csv
 
 def main():
@@ -35,6 +35,7 @@ def main():
         "acmeair-customerservice",
         "acmeair-bookingservice"
     ]
+
     current_configs = {svc: {"cpu": 500, "memory": 512, "replica": 1} for svc in service_to_use}
 
     # Metrics settings
@@ -84,8 +85,8 @@ def main():
     # Initialize components
     knowledge = Knowledge("./knowledge.json")
     monitor = Monitor(url, apikey, guid, sleep)
-    analyzer = Analyzer(analyze_metrics, service_to_use, knowledge.get_threshold, knowledge.get_weight)
-    planner = Planner()
+    analyzer = Analyzer(analyze_metrics, service_to_use, knowledge.get_threshold(), knowledge.get_weight())
+    planner = Planner(service_to_use, knowledge.get_resources_limits(), knowledge.get_resource_limitations())
     executor = Executor()
 
     print("Starting MAPE-K adaptation loop...")
