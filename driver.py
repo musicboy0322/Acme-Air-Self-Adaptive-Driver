@@ -88,9 +88,15 @@ def main():
     resources = knowledge.get_resources()
     current_configs = {
             svc: {
-                "cpu": resources[svc]["limits"]["cpu"],
-                "memory": resources[svc]["limits"]["memory"],
-                "replica": resources[svc]["limits"]["replica"]
+                "requests": {
+                    "cpu": resources[svc]["requests"]["cpu"],
+                    "memory": resources[svc]["requests"]["memory"]
+                },
+                "limits": {
+                    "cpu": resources[svc]["limits"]["cpu"],
+                    "memory": resources[svc]["limits"]["memory"]
+                },
+                "replica": resources[svc]["replica"]
             }
             for svc in service_to_use
     }
@@ -131,11 +137,12 @@ def main():
 
         # PLAN: Generate adaptation decisions
         print("[Planning Stage]")
-        decisions, new_configs = planner.evaluate_services(analysis_results, current_configs)
+        decisions, new_configs, system_situations = planner.evaluate_services(analysis_results, current_configs)
         print("")
+
         # EXECUTE: Apply adaptations
         print("[Executing Stage]")
-        success = executor.execute_plan(decisions, current_configs)
+        success = executor.execute_plan(decisions, current_configs, system_situations)
         if success:
             print("Successfully executed adaptation")
             current_configs = new_configs
@@ -146,7 +153,7 @@ def main():
         timestamp = datetime.now().isoformat()
         append_to_csv(csv_file, timestamp, data_dict, service_to_use)
 
-        # wait for nex round
+        # wait for next round
         time.sleep(sleep)
 
 if __name__ == "__main__":

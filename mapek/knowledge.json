@@ -29,57 +29,53 @@
       }, 
       "limits": {
         "memory": 512,
-        "cpu": 500,
-        "replica": 1
-      }
+        "cpu": 500
+      },
+      "replica": 1
     },
     "acmeair-bookingservice": {
       "requests": {
         "memory": 256,
-        "cpu": 250,
-        "replica": 1
+        "cpu": 250
       }, 
       "limits": {
         "memory": 512,
-        "cpu": 500,
-        "replica": 1
-      }
+        "cpu": 500
+      },
+      "replica": 1
     },
     "acmeair-customerservice": {
       "requests": {
         "memory": 256,
-        "cpu": 250,
-        "replica": 1
+        "cpu": 250
       }, 
       "limits": {
         "memory": 512,
-        "cpu": 500,
-        "replica": 1
-      }
+        "cpu": 500
+      },
+      "replica": 1
     },
     "acmeair-flightservice": {
       "requests": {
         "memory": 256,
-        "cpu": 250,
-        "replica": 1
+        "cpu": 250
       }, 
       "limits": {
         "memory": 512,
-        "cpu": 500,
-        "replica": 1
-      }
+        "cpu": 500
+      },
+      "replica": 1
     },
     "acmeair-mainservice": {
       "requests": {
         "memory": 256,
-        "cpu": 250,
-        "replica": 1
+        "cpu": 250
       }, 
       "limits": {
         "memory": 512,
-        "cpu": 500,
-        "replica": 1
-      }
+        "cpu": 500
+      },
+      "replica": 1
     }
   },
   "resources_limitations": {

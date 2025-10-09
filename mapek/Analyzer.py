@@ -96,10 +96,13 @@ class Analyzer:
 
             # analyze system health
             if overall_utility >= 0.8 and len(unhealthy_metrics) == 0:
+                # everything good
                 result["adaptation"] = "healthy"
             elif overall_utility < 0.5 or len(unhealthy_metrics) >= 2:
+                # need to modify system's baseline and headroom
                 result["adaptation"] = "unhealthy"
             else:
+                # need to modify system's baseline
                 result["adaptation"] = "warning"
             return result
         else:

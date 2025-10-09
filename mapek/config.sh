@@ -6,73 +6,63 @@ memory="512"
 replica="1"
 service=""
 
-# Process command line arguments
+# Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    cpu=*) # Using parameter names
-      cpu="${1#cpu=}"
-      shift
-      ;;
-    memory=*) # Using parameter names
-      memory="${1#memory=}"
-      shift
-      ;;
-    replica=*)
-      replica="${1#replica=}"
-      shift
-      ;;
-    service=*) # Using parameter names 
-      service="${1#service=}"
-      shift
-      ;;
-    [0-9a-z]*) # Using just values
-      if [ -z "$cpu" ]; then
-        cpu="$1"
-      elif [ -z "$memory" ]; then
-        memory="$1"
-      elif [ -z "$replica" ]; then
-        replica="$1"
-      elif [ -z "$service" ]; then
-        service="$1"
-      else
-        echo "Ignoring extra argument: $1"
-      fi
-      shift
-      ;;
+    cpu_requests=*) cpu_requests="${1#cpu_requests=}" ;;
+    memory_requests=*) memory_requests="${1#memory_requests=}" ;;
+    cpu_limits=*) cpu_limits="${1#cpu_limits=}" ;;
+    memory_limits=*) memory_limits="${1#memory_limits=}" ;;
+    replica=*) replica="${1#replica=}" ;;
+    service=*) service="${1#service=}" ;;
+    mode=*) mode="${1#mode=}" ;;
     *)
-      echo "Invalid argument: $1"
-      exit 1
+      echo "Unknown argument: $1"
       ;;
   esac
+  shift
 done
 
-# Check if both CPU and memory values are provided
-if [ -z "$cpu" ] || [ -z "$memory" ] || [ -z "$replica" ]; then
-  echo "Usage: $0 [cpu=CPU_VALUE] [memory=MEMORY_VALUE] [replica=REPLICA_VALUE]"
-  exit 1
-fi
-
-# Your script logic using the provided CPU and memory values
-echo "CPU: $cpu"
-echo "Memory: $memory"
-echo "Replica: $replica"
+echo "----------------------------"
 echo "Service: $service"
+echo "Mode: $mode"
+echo "Replica: $replica"
+echo "CPU requests: ${cpu_requests:-N/A}"
+echo "Memory requests: ${memory_requests:-N/A}"
+echo "CPU limits: ${cpu_limits:-N/A}"
+echo "Memory limits: ${memory_limits:-N/A}"
+echo "----------------------------"
 
-# Define the list of yaml files
-files=("microservices/deploy-acmeair-mainservice-java.yaml" "microservices/deploy-acmeair-authservice-java.yaml" "microservices/deploy-acmeair-flightservice-java.yaml" "microservices/deploy-acmeair-customerservice-java.yaml" "microservices/deploy-acmeair-bookingservice-java.yaml")
+# YAML file list
+files=("microservices/deploy-acmeair-mainservice-java.yaml"
+       "microservices/deploy-acmeair-authservice-java.yaml"
+       "microservices/deploy-acmeair-flightservice-java.yaml"
+       "microservices/deploy-acmeair-customerservice-java.yaml"
+       "microservices/deploy-acmeair-bookingservice-java.yaml")
 
-# Iterate over the services
+# Iterate over files
 for file in "${files[@]}"; do
-  # Use sed to replace CPU and memory values
   service_=$(echo $file | grep -oE "acmeair-.*?service" | head -1)
-  # echo $service_
   if [ "$service" == "" ] || [ "$service" == "$service_" ]; then
-    sed -i '' -e "s/cpu: \".*m\"/cpu: \"${cpu}m\"/g" $file
-    sed -i '' -e "s/memory: \".*Mi\"/memory: \"${memory}Mi\"/g" $file
+    echo "Updating $service_..."
+
+    # ⚠️ WARNING MODE → only limits
+    if [ "$mode" == "warning" ]; then
+      sed -i '' -E "s/(limits:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_limits}m\"/g" $file
+      sed -i '' -E "s/(limits:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_limits}Mi\"/g" $file
+
+    # 🔴 UNHEALTHY MODE → requests + limits
+    elif [ "$mode" == "unhealthy" ]; then
+      sed -i '' -E "s/(requests:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_requests}m\"/g" $file
+      sed -i '' -E "s/(requests:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_requests}Mi\"/g" $file
+      sed -i '' -E "s/(limits:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_limits}m\"/g" $file
+      sed -i '' -E "s/(limits:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_limits}Mi\"/g" $file
+    fi
+
+    # Replica always updated
     sed -i '' -e "s/replicas: [0-9]*/replicas: ${replica}/g" $file
-    echo $service_
+
+    echo "Applying changes to $file ..."
     oc apply -f $file
   fi
-  
-  # Apply the configuration with oc apply
 done
