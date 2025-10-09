@@ -1,12 +1,20 @@
 import json
+from collections import deque
 
 import pandas as pd
 
 class Analyzer:
     def __init__(self, analyze_metrics, service_to_use, thresholds, weights):
+        self.window_size = 5
         self.metrics = analyze_metrics
         self.services = service_to_use
         
+        self.deque_keys = ["cpu_deque", "memory_deque", "latency_avg_deque", "error_rate_deque"]
+        self.service_deque = {
+            svc: {key: deque(maxlen=self.window_size) for key in self.deque_keys}
+            for svc in service_to_use
+        }
+
         self.cpu_threshold_high = thresholds["cpu"]["high"]
         self.cpu_threshold_low = thresholds["cpu"]["low"]
         self.memory_threshold_high = thresholds["memory"]["high"]
@@ -20,7 +28,7 @@ class Analyzer:
         self.latency_weight = weights["latency"]
         self.error_rate_weight = weights["error_rate"]
 
-    def evaluate_metrics(self, cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time):
+    def _evaluate_metrics(self, svc, cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time):
         print(f"""
             CPU: {cpu:.2f}%
             Memory: {memory:.2f}%
@@ -33,54 +41,69 @@ class Analyzer:
             GC Time: {gc_time / 1000:.2f} ms
         """)
 
+        deques = self.service_deque[svc]
+        deques["cpu_deque"].append(cpu)
+        deques["memory_deque"].append(memory)
+        deques["latency_avg_deque"].append(latency_avg)
+        deques["error_rate_deque"].append(error_rate)
+
+        cpu_sum = sum(deques["cpu_deque"])
+        memory_sum = sum(deques["memory_deque"])
+        latency_avg_sum = sum(deques["latency_avg_deque"])
+        error_rate_sum = sum(deques["error_rate_deque"])
+
         unhealthy_metrics = set()
         result = {
-            "cpu": cpu,
-            "memory": memory,
-            "latency_avg": latency_avg,
+            "cpu": cpu_sum,
+            "memory": memory_sum,
+            "latency_avg": latency_avg_sum,
             "latency_max": latency_max,
             "request_count": request_count,
             "request_per_second": request_per_second,
             "request_byte_total": request_byte_total,
-            "error_rate": error_rate,
+            "error_rate": error_rate_sum,
             "gc_time": gc_time,
             "adaptation": "",
             "unhealthy_metrics": unhealthy_metrics
         }
 
-        # analyze global health
-        cpu_utility = self._normalize_high_is_good(self.cpu_threshold_low, self.cpu_threshold_high, cpu)
-        memory_utility = self._normalize_high_is_good(self.memory_threshold_low, self.memory_threshold_high, memory)
-        latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg)
-        error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate)
-        overall_utility = cpu_utility * self.cpu_weight + memory_utility * self.memory_weight + latency_utility * self.latency_weight + error_rate_utility * self.error_rate_weight
 
-        # analyze local health
-        if cpu > self.cpu_threshold_high:
-            unhealthy_metrics.add("cpu_high")
-        elif cpu < self.cpu_threshold_low:
-            unhealthy_metrics.add("cpu_low")
+        confidence = len(deques["cpu_deque"]) / self.window_size
+        if confidence >= 0.8:
+            # analyze global health
+            cpu_utility = self._normalize_high_is_good(self.cpu_threshold_low, self.cpu_threshold_high, cpu_sum)
+            memory_utility = self._normalize_high_is_good(self.memory_threshold_low, self.memory_threshold_high, memory_sum)
+            latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg_sum/1000000)
+            error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate_sum)
+            overall_utility = cpu_utility * self.cpu_weight + memory_utility * self.memory_weight + latency_utility * self.latency_weight + error_rate_utility * self.error_rate_weight
 
-        if memory > self.memory_threshold_high:
-            unhealthy_metrics.add("memory_high")
-        elif memory < self.memory_threshold_low:
-            unhealthy_metrics.add("memory_low")
-        
-        if latency_avg > self.latency_avg_threshold:
-            unhealthy_metrics.add("latency_avg_high")
-        
-        if error_rate > self.error_rate_threshold:
-            unhealthy_metrics.add("error_rate_high")
+            # analyze local health
+            if cpu > self.cpu_threshold_high:
+                unhealthy_metrics.add("cpu_high")
+            elif cpu < self.cpu_threshold_low:
+                unhealthy_metrics.add("cpu_low")
 
-        # analyze system health
-        if overall_utility >= 0.8 and len(unhealthy_metrics) == 0:
-            result["adaptation"] = "healthy"
-        elif overall_utility < 0.5 or len(unhealthy_metrics) >= 2:
-            result["adaptation"] = "unhealthy"
+            if memory > self.memory_threshold_high:
+                unhealthy_metrics.add("memory_high")
+            elif memory < self.memory_threshold_low:
+                unhealthy_metrics.add("memory_low")
+            
+            if latency_avg > self.latency_avg_threshold:
+                unhealthy_metrics.add("latency_avg_high")
+            
+            if error_rate > self.error_rate_threshold:
+                unhealthy_metrics.add("error_rate_high")
+
+            # analyze system health
+            if overall_utility >= 0.8 and len(unhealthy_metrics) == 0:
+                result["adaptation"] = "healthy"
+            elif overall_utility < 0.5 or len(unhealthy_metrics) >= 2:
+                result["adaptation"] = "unhealthy"
+            else:
+                result["adaptation"] = "warning"
+            return result
         else:
-            result["adaptation"] = "warning"
-
-        return result
+            return None
 
     def _create_dataframe(self, data):
         return pd.DataFrame([{
@@ -126,9 +149,10 @@ class Analyzer:
             # Other
             gc_time = metric_values.get("jvm.gc.global.time_avg", 0)
 
-            result = self.evaluate_metrics(cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time)
-            result["service"] = svc
-            analysis_results[svc] = result
+            result = self._evaluate_metrics(svc, cpu, memory, latency_avg, latency_max, request_count, request_per_second, request_byte_total, error_rate, gc_time)
+            if result != None:
+                result["service"] = svc
+                analysis_results[svc] = result
 
         return analysis_results
 

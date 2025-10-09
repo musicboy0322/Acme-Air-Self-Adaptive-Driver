@@ -100,6 +100,7 @@ def main():
     planner = Planner(service_to_use, knowledge.get_resource_limitations(), knowledge.get_resource_limitations())
     executor = Executor()
 
+    print("")
     print("Starting MAPE-K adaptation loop...")
     cycle_count = 0
 
@@ -107,9 +108,11 @@ def main():
     while True:
         cycle_count += 1
         print(f"\n=== Adaptation Cycle {cycle_count} ===")
-        
+        print("")
         # MONITOR: Collect metrics
-        print("Monitoring metrics from IBM Cloud ...")
+        print("[Monitoring Stage]")
+        print("Getting metrics from IBM Cloud...")
+        print("")
         data_dict = {}
         for metric, agg in monitor_metrics:
             res = monitor.fetch_data_from_ibm(metric, agg)
@@ -119,15 +122,19 @@ def main():
                 print(f"Failed to fetch {metric} with {agg} aggregation")
         
         # ANALYZE: Process metrics
-        print("Analyzing metrics ...")
+        print("[Analyzing Stage]")
         analysis_results = analyzer.process_data(data_dict)
+        if len(analysis_results) == 0:
+            print("Need to gather more data to continue, preventing from scaling flapping")
+            time.sleep(sleep)
+            continue
 
         # PLAN: Generate adaptation decisions
-        print("Planning adaptations ...")
+        print("[Planning Stage]")
         decisions, new_configs = planner.evaluate_services(analysis_results, current_configs)
-
+        print("")
         # EXECUTE: Apply adaptations
-        print("Executing adaptations ...")
+        print("[Executing Stage]")
         success = executor.execute_plan(decisions, current_configs)
         if success:
             print("Successfully executed adaptation")

@@ -7,7 +7,7 @@ fi
 HOST=$(oc get route acmeair-main-route -n acmeair-group${GROUP} --template='{{ .spec.host }}')
 PORT=80
 
-THREAD=50
+THREAD=10
 USER=999
 DURATION=60
 RAMP=0
