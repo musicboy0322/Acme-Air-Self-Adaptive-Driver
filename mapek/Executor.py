@@ -13,7 +13,7 @@ class Executor:
                 cpu = adaptation["cpu"]
                 memory = adaptation["memory"]
                 replica = adaptation["replica"]
-                command = f"sh configs.sh cpu={cpu} memory={memory} replica={replica} service={svc}"
+                command = f"sh ./mapek/config.sh cpu={cpu} memory={memory} replica={replica} service={svc}"
                 res = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 
                 if res.returncode == 0:

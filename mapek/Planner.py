@@ -1,19 +1,11 @@
 class Planner:
     def __init__(self, service_to_use, resources_limitations, resources):
-        self.min_replica = resources_limitations["min_replica"]
-        self.max_replica = resources_limitations["max_replica"]
-        self.min_cpu = resources_limitations["min_cpu"]
-        self.max_cpu = resources_limitations["max_cpu"] 
-        self.min_memory = resources_limitations["min_memory"]
-        self.max_memory = resources_limitations["max_memory"]
-        self.current_configs = {
-            svc: {
-                "cpu": resources[svc]["limits"]["cpu"],
-                "memory": resources[svc]["limits"]["memory"],
-                "replica": resources[svc]["limits"]["replica"]
-            }
-            for svc in service_to_use
-        }
+        self.min_replica = resources_limitations["single"]["min_replica"]
+        self.max_replica = resources_limitations["single"]["max_replica"]
+        self.min_cpu = resources_limitations["single"]["min_cpu"]
+        self.max_cpu = resources_limitations["single"]["max_cpu"] 
+        self.min_memory = resources_limitations["single"]["min_memory"]
+        self.max_memory = resources_limitations["single"]["max_memory"]
     
     def _decide_action(self, analysis_result, config):
         if not analysis_result or "adaptation" not in analysis_result:
@@ -61,7 +53,7 @@ class Planner:
                     adaptations.append("decrease_cpu")
 
             ## Horizontal Scale Up & Scale Down
-            
+
             # situation of increasing replica
             if (("latency_avg_high" in unhealthy_metrics or "error_rate_high" in unhealthy_metrics) and 
                 ("cpu_high" in unhealthy_metrics or "memory_high" in unhealthy_metrics)):
@@ -72,7 +64,7 @@ class Planner:
                     adaptations.append("increase_replica")
 
             # situation of decreasing replica
-            if "cpu_low" in unhealthy_metrics and "memory_low" in unhealthy_metrics and 
+            if "cpu_low" in unhealthy_metrics and "memory_low" in unhealthy_metrics:
                 if new_config["replica"] == self.min_replica:
                     print("Unable to decrease replica: Reached minimum")
                 else:
@@ -81,12 +73,12 @@ class Planner:
         
         return new_config if adaptations else None
     
-    def evaluate_services(self, analysis_results, configs):
+    def evaluate_services(self, analysis_results, current_configs):
         decisions = {}
-        new_configs = self.current_configs.copy()
+        new_configs = current_configs.copy()
         
         for svc, result in analysis_results.items():
-            new_config = self._decide_action(result, self.current_configs[svc])
+            new_config = self._decide_action(result, current_configs[svc])
             if new_config:
                 decisions[svc] = new_config
                 new_configs[svc] = new_config

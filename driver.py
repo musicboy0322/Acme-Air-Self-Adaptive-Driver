@@ -6,10 +6,11 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from ./mapek/Monitor import Monitor
-from ./mapek/Analyzer import Analyzer
-from ./mapek/Planner import Planner
-from ./mapek/Executor import Executor
+from mapek.Knowledge import Knowledge
+from mapek.Monitor import Monitor
+from mapek.Analyzer import Analyzer
+from mapek.Planner import Planner
+from mapek.Executor import Executor
 from utils import init_csv, append_to_csv
 
 def main():
@@ -83,10 +84,20 @@ def main():
     init_csv(csv_file)
     
     # Initialize components
-    knowledge = Knowledge("./knowledge.json")
+    knowledge = Knowledge("./mapek/knowledge.json")
+    resources = knowledge.get_resources()
+    current_configs = {
+            svc: {
+                "cpu": resources[svc]["limits"]["cpu"],
+                "memory": resources[svc]["limits"]["memory"],
+                "replica": resources[svc]["limits"]["replica"]
+            }
+            for svc in service_to_use
+    }
+
     monitor = Monitor(url, apikey, guid, sleep)
     analyzer = Analyzer(analyze_metrics, service_to_use, knowledge.get_threshold(), knowledge.get_weight())
-    planner = Planner(service_to_use, knowledge.get_resources_limits(), knowledge.get_resource_limitations())
+    planner = Planner(service_to_use, knowledge.get_resource_limitations(), knowledge.get_resource_limitations())
     executor = Executor()
 
     print("Starting MAPE-K adaptation loop...")
@@ -129,7 +140,7 @@ def main():
         append_to_csv(csv_file, timestamp, data_dict, service_to_use)
 
         # wait for nex round
-        time.sleep(SLEEP)
+        time.sleep(sleep)
 
 if __name__ == "__main__":
     main()
