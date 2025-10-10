@@ -63,6 +63,7 @@ class Analyzer:
             "request_byte_total": request_byte_total,
             "error_rate": error_rate_sum,
             "gc_time": gc_time,
+            "overall_utility": 0,
             "adaptation": "",
             "unhealthy_metrics": unhealthy_metrics
         }
@@ -76,6 +77,7 @@ class Analyzer:
             latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg_sum/1000000)
             error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate_sum)
             overall_utility = cpu_utility * self.cpu_weight + memory_utility * self.memory_weight + latency_utility * self.latency_weight + error_rate_utility * self.error_rate_weight
+            result["overall_utility"] = overall_utility
 
             # analyze local health
             if cpu > self.cpu_threshold_high:

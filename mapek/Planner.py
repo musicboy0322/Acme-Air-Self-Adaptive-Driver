@@ -1,11 +1,12 @@
 class Planner:
-    def __init__(self, service_to_use, resources_limitations, resources):
+    def __init__(self, service_to_use, resources_limitations, resources, roi):
         self.min_replica = resources_limitations["single"]["min_replica"]
         self.max_replica = resources_limitations["single"]["max_replica"]
         self.min_cpu = resources_limitations["single"]["min_cpu"]
         self.max_cpu = resources_limitations["single"]["max_cpu"] 
         self.min_memory = resources_limitations["single"]["min_memory"]
         self.max_memory = resources_limitations["single"]["max_memory"]
+        self.roi_threshold = roi
     
     def _decide_action(self, analysis_result, config, svc):
         if not analysis_result or "adaptation" not in analysis_result:
@@ -15,17 +16,46 @@ class Planner:
         new_config = config.copy()  # Don't modify original
         adaptations = []
         system_situation = analysis_result["adaptation"]
+        overall_utility = analysis_result["overall_utility"]
 
         ## When system situation is healthy
         if system_situation == "healthy":
             return None
         ## When system situation is warning
         elif system_situation == "warning":
-            return system_situation, self._adopt_warning_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
+            new_config = self._adopt_warning_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
         ## When system situation is unhealthy
         elif system_situation == "unhealthy":
-            return system_situation, self._adopt_unhealthy_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
-    
+            new_config = system_situation, self._adopt_unhealthy_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
+
+        old_cpu = config["limits"]["cpu"]
+        new_cpu = new_config["limits"]["cpu"]
+        old_memory = config["limits"]["memory"]
+        new_memory = new_config["limits"]["memory"]
+        old_replica = config["replica"]
+        new_replica = new_config["replica"]
+
+        cpu_cost = abs((new_cpu - old_cpu) / old_cpu) if old_cpu else 0
+        mem_cost = abs((new_mem - old_mem) / old_mem) if old_mem else 0
+        replica_cost = abs((new_replica - old_replica) / old_replica) if old_replica else 0
+
+        total_cost = 0.4 * cpu_cost + 0.4 * mem_cost + 0.2 * replica_cost
+
+        benefit = 0.1 * ((new_cpu - old_cpu) / old_cpu + (new_mem - old_mem) / old_mem)
+        predicted_utility = min(1.0, current_utility + benefit)
+
+        roi = benefit / total_cost if total_cost > 0 else 0
+
+        print(f"[{svc}] Utility={benefit:.3f}, Cost={total_cost:.3f}, ROI={roi:.2f}")
+
+        if roi < self.roi_threshold:
+            print(f"Skipping adaptation for {svc} (ROI too low: {roi:.2f})")
+            return None
+        else:
+            print(f"Proceeding with adaptation for {svc} (ROI: {roi:.2f})")
+            return system_situation, new_config
+
+
     def evaluate_services(self, analysis_results, current_configs):
         decisions = {}
         new_configs = current_configs.copy()

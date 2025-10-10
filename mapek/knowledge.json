@@ -12,7 +12,8 @@
       "avg": 200,
       "max": 500
     },
-    "error_rate": 0.1
+    "error_rate": 0.1,
+    "roi": 0.5
   },
   "weights": {
     "cpu": 0.15,

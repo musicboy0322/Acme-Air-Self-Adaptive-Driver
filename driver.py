@@ -103,7 +103,7 @@ def main():
 
     monitor = Monitor(url, apikey, guid, sleep)
     analyzer = Analyzer(analyze_metrics, service_to_use, knowledge.get_threshold(), knowledge.get_weight())
-    planner = Planner(service_to_use, knowledge.get_resource_limitations(), knowledge.get_resource_limitations())
+    planner = Planner(service_to_use, knowledge.get_resource_limitations(), knowledge.get_resource_limitations(), knowledge.get_threshold()["roi"])
     executor = Executor()
 
     print("")
