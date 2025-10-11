@@ -18,39 +18,51 @@ class Planner:
         system_situation = analysis_result["adaptation"]
         overall_utility = analysis_result["overall_utility"]
 
+        print(f'''{svc}: {system_situation}''')
+        print(analysis_result["unhealthy_metrics"])
+
         ## When system situation is healthy
         if system_situation == "healthy":
             return None
         ## When system situation is warning
         elif system_situation == "warning":
-            new_config = self._adopt_warning_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
+            new_config = self._adopt_warning_situation(analysis_result["unhealthy_metrics"], new_config, adaptations, svc)
         ## When system situation is unhealthy
         elif system_situation == "unhealthy":
-            new_config = system_situation, self._adopt_unhealthy_situation(analysis_result["unhealthy_metrics"], new_config, adaptations)
+            new_config = self._adopt_unhealthy_situation(analysis_result["unhealthy_metrics"], new_config, adaptations, svc)
 
-        old_cpu = config["limits"]["cpu"]
-        new_cpu = new_config["limits"]["cpu"]
-        old_memory = config["limits"]["memory"]
-        new_memory = new_config["limits"]["memory"]
-        old_replica = config["replica"]
+        print(config)
+        print(new_config)
+
+        old_cpu = (config["requests"]["cpu"] + config["limits"]["cpu"]) / 2
+        new_cpu = (new_config["requests"]["cpu"] + new_config["limits"]["cpu"]) / 2
+        old_memory = (config["requests"]["memory"] + config["limits"]["memory"]) / 2
+        new_memory = (new_config["requests"]["memory"] + new_config["limits"]["memory"]) / 2
+        old_replica = config["replica"] 
         new_replica = new_config["replica"]
 
+        # calculate single cost
         cpu_cost = abs((new_cpu - old_cpu) / old_cpu) if old_cpu else 0
-        mem_cost = abs((new_mem - old_mem) / old_mem) if old_mem else 0
+        mem_cost = abs((new_memory - old_memory) / old_memory) if old_memory else 0
         replica_cost = abs((new_replica - old_replica) / old_replica) if old_replica else 0
-
+        # calculate overall cost
         total_cost = 0.4 * cpu_cost + 0.4 * mem_cost + 0.2 * replica_cost
-
-        benefit = 0.1 * ((new_cpu - old_cpu) / old_cpu + (new_mem - old_mem) / old_mem)
-        predicted_utility = min(1.0, current_utility + benefit)
-
+        # calculate benifit from the changes in this time
+        benefit = 0.1 * ((new_cpu - old_cpu) / old_cpu + (new_memory - old_memory) / old_memory)
+        # calcualte predicted utility
+        predicted_utility = min(1.0, overall_utility + benefit)
+        # calculate roi
         roi = benefit / total_cost if total_cost > 0 else 0
+        
 
-        print(f"[{svc}] Utility={benefit:.3f}, Cost={total_cost:.3f}, ROI={roi:.2f}")
+        print(f"{svc} Utility={benefit:.3f}, Cost={total_cost:.3f}, ROI={roi:.2f}")
 
-        if roi < self.roi_threshold:
+        if roi == 0:
+            print(f"Skipping adaptation for {svc} (Don't have any change between old and new config)")
+            return None, None
+        elif roi < self.roi_threshold:
             print(f"Skipping adaptation for {svc} (ROI too low: {roi:.2f})")
-            return None
+            return None, None
         else:
             print(f"Proceeding with adaptation for {svc} (ROI: {roi:.2f})")
             return system_situation, new_config
@@ -72,122 +84,84 @@ class Planner:
         
         return decisions, new_configs, system_situations
 
-    def _adopt_warning_situation(self, unhealthy_metrics, new_config, adaptations):
+    def _adopt_warning_situation(self, unhealthy_metrics, new_config, adaptations, svc):
         ## Vertical Scale Up & Scale Down
         # situation of increasing cpu
         if "cpu_high" in unhealthy_metrics and "latency_avg_high" in unhealthy_metrics:
-            if new_config["limits"]["cpu"] == self.max_cpu:
-                print(f'''{svc} unable to increase cpu: Reached maximum''')
-            else:
-                new_config["limits"]["cpu"] = min(new_config["limits"]["cpu"] + 250, self.max_cpu)
-                adaptations.append("increase_cpu")
+            print(new_config["limits"]["cpu"])
+            print(self.max_cpu)
+            new_config["limits"]["cpu"] = min(new_config["limits"]["cpu"] + 250, self.max_cpu)
+            adaptations.append("increase_cpu")
 
         # situation of increasing memory
         if "memory_high" in unhealthy_metrics and "gc_time_high" in unhealthy_metrics:
-            if new_config["limits"]["memory"] == self.max_memory:
-                print(f'''{svc} Unable to increase memory: Reached maximum''')
-            else:
-                new_config["limits"]["memory"] = min(new_config["limits"]["memory"] + 256, self.max_memory)
-                adaptations.append("increase_memory")
+            print(new_config["limits"]["memory"])
+            print(self.max_memory)
+            new_config["limits"]["memory"] = min(new_config["limits"]["memory"] + 256, self.max_memory)
+            adaptations.append("increase_memory")
 
         # situation of decreasing CPU
         if "cpu_low" in unhealthy_metrics:
-            if new_config["limits"]["cpu"] == self.min_cpu:
-                print(f'''{svc} Unable to increase cpu: Reached minimum''')
-            else:
-                new_config["limits"]["cpu"] = max(new_config["limits"]["cpu"] - 250, self.min_cpu)
-                adaptations.append("decrease_cpu")
+            print(new_config["limits"]["memory"])
+            print(self.min_cpu)
+            new_config["limits"]["cpu"] = max(new_config["limits"]["cpu"] - 250, self.min_cpu)
+            adaptations.append("decrease_cpu")
         
         # situation of decreasing memory
         if "memory_low" in unhealthy_metrics:
-            if new_config["limits"]["memory"] == self.min_memory:
-                print(f'''{svc} Unable to increase cpu: Reached maximum''')
-            else:
-                new_config["limits"]["memory"] = min(new_config["limits"]["memory"] - 256, self.min_memory)
-                adaptations.append("decrease_cpu")
+            new_config["limits"]["memory"] = max(new_config["limits"]["memory"] - 256, self.min_memory)
+            adaptations.append("decrease_cpu")
 
         ## Horizontal Scale Up & Scale Down
         # situation of increasing replica
         if (("latency_avg_high" in unhealthy_metrics or "error_rate_high" in unhealthy_metrics) and 
             ("cpu_high" in unhealthy_metrics or "memory_high" in unhealthy_metrics)):
-            if new_config["replica"] == self.max_replica:
-                print(f'''{svc} Unable to increase replica: Reached maximum''')
-            else:
-                new_config["replica"] = min(new_config["replica"] + 1, self.max_replica)
-                adaptations.append("increase_replica")
+            new_config["replica"] = min(new_config["replica"] + 1, self.max_replica)
+            adaptations.append("increase_replica")
 
         # situation of decreasing replica
         if "cpu_low" in unhealthy_metrics and "memory_low" in unhealthy_metrics:
-            if new_config["replica"] == self.min_replica:
-                print(f'''{svc} Unable to decrease replica: Reached minimum''')
-            else:
-                new_config["replica"] = max(new_config["replica"] - 1, self.min_replica)
-                adaptations.append("decrease_replica")
+            new_config["replica"] = max(new_config["replica"] - 1, self.min_replica)
+            adaptations.append("decrease_replica")
         
         return new_config
 
-    def _adopt_unhealthy_situation(self, unhealthy_metrics, new_config, adaptations):
+    def _adopt_unhealthy_situation(self, unhealthy_metrics, new_config, adaptations, svc):
         ## Vertical Scale Up & Scale Down
         # situation of increasing cpu
         if "cpu_high" in unhealthy_metrics and "latency_avg_high" in unhealthy_metrics:
-            if new_config["requests"]["cpu"] == self.max_cpu:
-                print(f'''{svc} unable to increase cpu: Reached maximum''')
-            if new_config["limits"]["cpu"] == self.max_cpu:
-                print(f'''{svc} unable to increase cpu: Reached maximum''')
-            else:
-                new_config["requests"]["cpu"] = min(new_config["requests"]["cpu"] + 250, self.max_cpu)
-                new_config["limits"]["cpu"] = min(new_config["limits"]["cpu"] + 250, self.max_cpu)
-                adaptations.append("increase_cpu")
+            new_config["requests"]["cpu"] = min(new_config["requests"]["cpu"] + 250, self.max_cpu)
+            new_config["limits"]["cpu"] = min(new_config["limits"]["cpu"] + 250, self.max_cpu)
+            adaptations.append("increase_cpu")
 
         # situation of increasing memory
         if "memory_high" in unhealthy_metrics and "gc_time_high" in unhealthy_metrics:
-            if new_config["limits"]["memory"] == self.max_memory:
-                print(f'''{svc} Unable to increase memory: Reached maximum''')
-            if new_config["limits"]["limits"] == self.max_memory:
-                print(f'''{svc} Unable to increase memory: Reached maximum''')
-            else:
-                new_config["requests"]["memory"] = min(new_config["requests"]["memory"] + 256, self.max_memory)
-                new_config["limits"]["memory"] = min(new_config["limits"]["memory"] + 256, self.max_memory)
-                adaptations.append("increase_memory")
+            new_config["requests"]["memory"] = min(new_config["requests"]["memory"] + 256, self.max_memory)
+            new_config["limits"]["memory"] = min(new_config["limits"]["memory"] + 256, self.max_memory)
+            adaptations.append("increase_memory")
 
         # situation of decreasing CPU
         if "cpu_low" in unhealthy_metrics:
-            if new_config["requests"]["cpu"] == self.min_cpu:
-                print(f'''{svc} Unable to increase cpu: Reached minimum''')
-            if new_config["limits"]["cpu"] == self.min_cpu:
-                print(f'''{svc} Unable to increase cpu: Reached minimum''')
-            else:
-                new_config["requests"]["cpu"] = max(new_config["requests"]["cpu"] - 250, self.min_cpu)
-                new_config["limits"]["cpu"] = max(new_config["limits"]["cpu"] - 250, self.min_cpu)
-                adaptations.append("decrease_cpu")
+            new_config["requests"]["cpu"] = max(new_config["requests"]["cpu"] - 250, self.min_cpu)
+            new_config["limits"]["cpu"] = max(new_config["limits"]["cpu"] - 250, self.min_cpu)
+            adaptations.append("decrease_cpu")
         
         # situation of decreasing memory
         if "memory_low" in unhealthy_metrics:
-            if new_config["requests"]["memory"] == self.min_memory:
-                print(f'''{svc} Unable to increase cpu: Reached maximum''')
-            if new_config["limits"]["memory"] == self.min_memory:
-                print(f'''{svc} Unable to increase cpu: Reached maximum''')
-            else:
-                new_config["requests"]["memory"] = min(new_config["limits"]["memory"] - 256, self.min_memory)
-                new_config["limits"]["memory"] = min(new_config["limits"]["memory"] - 256, self.min_memory)
-                adaptations.append("decrease_cpu")
+            new_config["requests"]["memory"] = max(new_config["limits"]["memory"] - 256, self.min_memory)
+            new_config["limits"]["memory"] = max(new_config["limits"]["memory"] - 256, self.min_memory)
+            adaptations.append("decrease_cpu")
 
         ## Horizontal Scale Up & Scale Down
         # situation of increasing replica
         if (("latency_avg_high" in unhealthy_metrics or "error_rate_high" in unhealthy_metrics) and 
             ("cpu_high" in unhealthy_metrics or "memory_high" in unhealthy_metrics)):
-            if new_config["replica"] == self.max_replica:
-                print(f'''{svc} Unable to increase replica: Reached maximum''')
-            else:
-                new_config["replica"] = min(new_config["replica"] + 1, self.max_replica)
-                adaptations.append("increase_replica")
+            new_config["replica"] = min(new_config["replica"] + 1, self.max_replica)
+            adaptations.append("increase_replica")
 
         # situation of decreasing replica
         if "cpu_low" in unhealthy_metrics and "memory_low" in unhealthy_metrics:
-            if new_config["replica"] == self.min_replica:
-                print(f'''{svc} Unable to decrease replica: Reached minimum''')
-            else:
-                new_config["replica"] = max(new_config["replica"] - 1, self.min_replica)
-                adaptations.append("decrease_replica")
+            new_config["replica"] = max(new_config["replica"] - 1, self.min_replica)
+            adaptations.append("decrease_replica")
         
         return new_config

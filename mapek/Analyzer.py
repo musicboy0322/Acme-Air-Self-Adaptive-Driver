@@ -41,10 +41,13 @@ class Analyzer:
             GC Time: {gc_time / 1000:.2f} ms
         """)
 
+        print(latency_avg)
+        print(latency_avg/1000000)
+
         deques = self.service_deque[svc]
         deques["cpu_deque"].append(cpu)
         deques["memory_deque"].append(memory)
-        deques["latency_avg_deque"].append(latency_avg)
+        deques["latency_avg_deque"].append(latency_avg/1000000)
         deques["error_rate_deque"].append(error_rate)
 
         cpu_avg = sum(deques["cpu_deque"]) / len(deques["cpu_deque"])
@@ -80,20 +83,20 @@ class Analyzer:
             result["overall_utility"] = overall_utility
 
             # analyze local health
-            if cpu > self.cpu_threshold_high:
+            if cpu_avg > self.cpu_threshold_high:
                 unhealthy_metrics.add("cpu_high")
-            elif cpu < self.cpu_threshold_low:
+            elif cpu_avg < self.cpu_threshold_low:
                 unhealthy_metrics.add("cpu_low")
 
-            if memory > self.memory_threshold_high:
+            if memory_avg > self.memory_threshold_high:
                 unhealthy_metrics.add("memory_high")
-            elif memory < self.memory_threshold_low:
+            elif memory_avg < self.memory_threshold_low:
                 unhealthy_metrics.add("memory_low")
             
-            if latency_avg > self.latency_avg_threshold:
+            if latency_avg_avg > self.latency_avg_threshold:
                 unhealthy_metrics.add("latency_avg_high")
             
-            if error_rate > self.error_rate_threshold:
+            if error_rate_avg > self.error_rate_threshold:
                 unhealthy_metrics.add("error_rate_high")
 
             # analyze system health

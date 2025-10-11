@@ -9,8 +9,8 @@
       "high": 80
     },
     "latency": {
-      "avg": 200,
-      "max": 500
+      "avg": 150,
+      "max": 200
     },
     "error_rate": 0.1,
     "roi": 0.5
