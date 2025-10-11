@@ -47,21 +47,21 @@ class Analyzer:
         deques["latency_avg_deque"].append(latency_avg)
         deques["error_rate_deque"].append(error_rate)
 
-        cpu_sum = sum(deques["cpu_deque"])
-        memory_sum = sum(deques["memory_deque"])
-        latency_avg_sum = sum(deques["latency_avg_deque"])
-        error_rate_sum = sum(deques["error_rate_deque"])
+        cpu_avg = sum(deques["cpu_deque"]) / len(deques["cpu_deque"])
+        memory_avg = sum(deques["memory_deque"]) / len(deques["memory_deque"])
+        latency_avg_avg = sum(deques["latency_avg_deque"]) / len(deques["latency_avg_deque"])
+        error_rate_avg = sum(deques["error_rate_deque"]) / len(deques["error_rate_deque"])
 
         unhealthy_metrics = set()
         result = {
-            "cpu": cpu_sum,
-            "memory": memory_sum,
-            "latency_avg": latency_avg_sum,
+            "cpu": cpu_avg,
+            "memory": memory_avg,
+            "latency_avg": latency_avg_avg,
             "latency_max": latency_max,
             "request_count": request_count,
             "request_per_second": request_per_second,
             "request_byte_total": request_byte_total,
-            "error_rate": error_rate_sum,
+            "error_rate": error_rate_avg,
             "gc_time": gc_time,
             "overall_utility": 0,
             "adaptation": "",
@@ -72,10 +72,10 @@ class Analyzer:
         confidence = len(deques["cpu_deque"]) / self.window_size
         if confidence >= 0.8:
             # analyze global health
-            cpu_utility = self._normalize_high_is_good(self.cpu_threshold_low, self.cpu_threshold_high, cpu_sum)
-            memory_utility = self._normalize_high_is_good(self.memory_threshold_low, self.memory_threshold_high, memory_sum)
-            latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg_sum/1000000)
-            error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate_sum)
+            cpu_utility = self._normalize_high_is_good(self.cpu_threshold_low, self.cpu_threshold_high, cpu_avg)
+            memory_utility = self._normalize_high_is_good(self.memory_threshold_low, self.memory_threshold_high, memory_avg)
+            latency_utility = self._normalize_low_is_good(self.latency_avg_threshold, latency_avg_avg/1000000)
+            error_rate_utility = self._normalize_low_is_good(self.error_rate_threshold, error_rate_avg)
             overall_utility = cpu_utility * self.cpu_weight + memory_utility * self.memory_weight + latency_utility * self.latency_weight + error_rate_utility * self.error_rate_weight
             result["overall_utility"] = overall_utility
 
