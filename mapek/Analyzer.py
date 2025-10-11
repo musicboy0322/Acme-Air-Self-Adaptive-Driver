@@ -41,9 +41,6 @@ class Analyzer:
             GC Time: {gc_time / 1000:.2f} ms
         """)
 
-        print(latency_avg)
-        print(latency_avg/1000000)
-
         deques = self.service_deque[svc]
         deques["cpu_deque"].append(cpu)
         deques["memory_deque"].append(memory)

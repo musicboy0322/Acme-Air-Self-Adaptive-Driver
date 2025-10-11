@@ -84,14 +84,17 @@ if [ "$ROLLBACK" = true ]; then
   exit 0
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MICRO_DIR="$SCRIPT_DIR/microservices"
+
 # ========================
 # YAML File Targets
 # ========================
-files=("../microservices/deploy-acmeair-mainservice-java.yaml"
-       "../microservices/deploy-acmeair-authservice-java.yaml"
-       "../microservices/deploy-acmeair-flightservice-java.yaml"
-       "../microservices/deploy-acmeair-customerservice-java.yaml"
-       "../microservices/deploy-acmeair-bookingservice-java.yaml")
+files=("$MICRO_DIR/deploy-acmeair-mainservice-java.yaml"
+       "$MICRO_DIR/deploy-acmeair-authservice-java.yaml"
+       "$MICRO_DIR/deploy-acmeair-flightservice-java.yaml"
+       "$MICRO_DIR/deploy-acmeair-customerservice-java.yaml"
+       "$MICRO_DIR/deploy-acmeair-bookingservice-java.yaml")
 
 # ========================
 # Dry-run Mode

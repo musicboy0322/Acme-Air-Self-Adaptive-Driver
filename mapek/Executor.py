@@ -43,7 +43,7 @@ class Executor:
         if not backup_path or not os.path.exists(backup_path):
             print(f"[ROLLBACK][ERROR] No valid backup found for {svc}.")
             return
-        rollback_cmd = f"sh ./mapek/config.sh rollback service={svc} backup={backup_path}"
+        rollback_cmd = f"sh ./config.sh rollback service={svc} backup={backup_path}"
         res = self._run(rollback_cmd)
         if res.returncode == 0:
             print(f"[ROLLBACK][OK] {svc} restored from backup.")
