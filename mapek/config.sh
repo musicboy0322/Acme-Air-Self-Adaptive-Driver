@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Detect OS and define sed in-place flag
+# ========================
+# Cross-platform sed setup
+# ========================
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  # macOS
   SED_INPLACE=(-i '')
 else
-  # Linux (default)
   SED_INPLACE=(-i)
 fi
 
 # ========================
-# Configurable Parameters
+# Flags & defaults
 # ========================
 DRY_RUN=false
 ROLLBACK=false
@@ -18,36 +18,21 @@ BACKUP_FILE=""
 BACKUP_DIR="./backup"
 
 # ========================
-# Argument Parsing
+# Argument parsing
 # ========================
-for arg in "$@"; do
-  case $arg in
-    --dry-run)
-      DRY_RUN=true
-      ;;
-    rollback)
-      ROLLBACK=true
-      ;;
-    backup=*)
-      BACKUP_FILE="${arg#*=}"
-      ;;
-    service=*)
-      SERVICE="${arg#*=}"
-      ;;
-    *)
-      ;;
-  esac
-done
-
-# Initialize variables with default values
-cpu="500"
-memory="512"
+cpu_requests=""
+memory_requests=""
+cpu_limits=""
+memory_limits=""
 replica="1"
+mode=""
 service=""
 
-# Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --dry-run) DRY_RUN=true ;;
+    rollback) ROLLBACK=true ;;
+    backup=*) BACKUP_FILE="${1#backup=}" ;;
     cpu_requests=*) cpu_requests="${1#cpu_requests=}" ;;
     memory_requests=*) memory_requests="${1#memory_requests=}" ;;
     cpu_limits=*) cpu_limits="${1#cpu_limits=}" ;;
@@ -55,15 +40,16 @@ while [[ $# -gt 0 ]]; do
     replica=*) replica="${1#replica=}" ;;
     service=*) service="${1#service=}" ;;
     mode=*) mode="${1#mode=}" ;;
-    *)
-      ;;
   esac
   shift
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MICRO_DIR="$SCRIPT_DIR/microservices"
+
 echo "----------------------------"
-echo "Service: $service"
-echo "Mode: $mode"
+echo "Service: ${service:-ALL}"
+echo "Mode: ${mode:-N/A}"
 echo "Replica: $replica"
 echo "CPU requests: ${cpu_requests:-N/A}"
 echo "Memory requests: ${memory_requests:-N/A}"
@@ -72,7 +58,7 @@ echo "Memory limits: ${memory_limits:-N/A}"
 echo "----------------------------"
 
 # ========================
-# Rollback Mode
+# Rollback
 # ========================
 if [ "$ROLLBACK" = true ]; then
   if [ ! -f "$BACKUP_FILE" ]; then
@@ -84,11 +70,8 @@ if [ "$ROLLBACK" = true ]; then
   exit 0
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MICRO_DIR="$SCRIPT_DIR/microservices"
-
 # ========================
-# YAML File Targets
+# Target YAML files
 # ========================
 files=("$MICRO_DIR/deploy-acmeair-mainservice-java.yaml"
        "$MICRO_DIR/deploy-acmeair-authservice-java.yaml"
@@ -97,81 +80,109 @@ files=("$MICRO_DIR/deploy-acmeair-mainservice-java.yaml"
        "$MICRO_DIR/deploy-acmeair-bookingservice-java.yaml")
 
 # ========================
-# Dry-run Mode
-# ========================
-if [ "$DRY_RUN" = true ]; then
-  echo "[DRY-RUN] Verifying YAML files..."
-  for file in "${files[@]}"; do
-    service_=$(echo "$file" | grep -oE "acmeair-.*?service" | head -1)
-    if [ "$service" == "" ] || [ "$service" == "$service_" ]; then
-      if [ ! -f "$file" ]; then
-        echo "[DRY-RUN][ERROR] Missing file: $file"
-        continue
-      fi
-      echo "[DRY-RUN] Would update $service_:"
-      echo "  - YAML: $file"
-      echo "  - Replica: $replica"
-      [ -n "$cpu_limits" ] && echo "  - CPU limits: ${cpu_limits}m"
-      [ -n "$memory_limits" ] && echo "  - Memory limits: ${memory_limits}Mi"
-      [ -n "$cpu_requests" ] && echo "  - CPU requests: ${cpu_requests}m"
-      [ -n "$memory_requests" ] && echo "  - Memory requests: ${memory_requests}Mi"
-    fi
-  done
-  echo "[DRY-RUN] Completed. No changes applied."
-  exit 0
-fi
-
-# ========================
-# Backup Stage (before modification)
+# Backup before change
 # ========================
 mkdir -p "$BACKUP_DIR"
 timestamp=$(date +%Y%m%d_%H%M%S)
 
 for file in "${files[@]}"; do
-  service_=$(echo "$file" | grep -oE "acmeair-.*?service" | head -1)
-  if [ "$service" == "" ] || [ "$service" == "$service_" ]; then
+  svc=$(echo "$file" | grep -oE "acmeair-[a-z]+service" | head -1)
+  if [ -z "$service" ] || [ "$service" == "$svc" ]; then
     if [ -f "$file" ]; then
-      backup_path="$BACKUP_DIR/${service_}_${timestamp}.yaml"
+      backup_path="$BACKUP_DIR/${svc}_${timestamp}.yaml"
       cp "$file" "$backup_path"
-      echo "[BACKUP] Saved $service_ to $backup_path"
-    else
-      echo "[WARNING] YAML not found for $service_. Skipping backup."
+      echo "[BACKUP] Saved $svc → $backup_path"
     fi
   fi
 done
 
+update_resources() {
+  local file=$1
+  local container_name=$2
+  
+  echo "[DEBUG] Updating resources for container: $container_name in $file"
+  
+  sed "${SED_INPLACE[@]}" "
+    /- name: $container_name/,/^[[:space:]]*- name:/ {
+      /resources:/,/^[[:space:]]*[a-z]*:/ {
+        /requests:/,/limits:/ {
+          s|cpu: \"[^\"]*\"|cpu: \"${cpu_requests}m\"|
+          s|memory: \"[^\"]*\"|memory: \"${memory_requests}Mi\"|
+        }
+        /limits:/,/^[[:space:]]*[a-z]*:/ {
+          s|cpu: \"[^\"]*\"|cpu: \"${cpu_limits}m\"|
+          s|memory: \"[^\"]*\"|memory: \"${memory_limits}Mi\"|
+        }
+      }
+    }
+  " "$file"
+}
+
 # ========================
-# Apply Changes
+# Apply actual changes
 # ========================
 for file in "${files[@]}"; do
-  service_=$(echo $file | grep -oE "acmeair-.*?service" | head -1)
-  if [ "$service" == "" ] || [ "$service" == "$service_" ]; then
-    echo "Updating $service_..."
-
-    # ⚠️ WARNING MODE → only limits
-    if [ "$mode" == "warning" ]; then
-      sed "${SED_INPLACE[@]}" -E "s/(limits:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_limits}m\"/g" "$file"
-      sed "${SED_INPLACE[@]}" -E "s/(limits:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_limits}Mi\"/g" "$file"
-
-    # 🔴 UNHEALTHY MODE → requests + limits
-    elif [ "$mode" == "unhealthy" ]; then
-      sed "${SED_INPLACE[@]}" -E "s/(requests:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_requests}m\"/g" "$file"
-      sed "${SED_INPLACE[@]}" -E "s/(requests:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_requests}Mi\"/g" "$file"
-      sed "${SED_INPLACE[@]}" -E "s/(limits:[[:space:]]*\n[[:space:]]*cpu: )\"[0-9]+m\"/\1\"${cpu_limits}m\"/g" "$file"
-      sed "${SED_INPLACE[@]}" -E "s/(limits:[[:space:]]*\n[[:space:]]*memory: )\"[0-9]+Mi\"/\1\"${memory_limits}Mi\"/g" "$file"
-    fi
-
-    # Replica always updated
-    sed "${SED_INPLACE[@]}" -e "s/replicas: [0-9]*/replicas: ${replica}/g" "$file"
-
-    echo "Applying changes to $file ..."
-    oc apply -f "$file"
-
-    if [ $? -ne 0 ]; then
-      echo "[ERROR] Failed to apply $file. Consider running rollback manually."
-      exit 1
-    fi
+  svc=$(echo "$file" | grep -oE "acmeair-[a-z]+service" | head -1)
+  if [ -n "$service" ] && [ "$service" != "$svc" ]; then
+    continue
   fi
+
+  if [ ! -f "$file" ]; then
+    echo "[SKIP] File not found: $file"
+    continue
+  fi
+
+  echo "[UPDATE] Processing $svc..."
+  
+  container_name="${svc}-java"
+
+  if [ "$mode" == "warning" ]; then
+    sed "${SED_INPLACE[@]}" "
+      /- name: $container_name/,/^[[:space:]]*- name:/ {
+        /resources:/,/^[[:space:]]*env:/ {
+          /limits:/,/^[[:space:]]*env:/ {
+            s|cpu: \"[^\"]*\"|cpu: \"${cpu_limits}m\"|
+            s|memory: \"[^\"]*\"|memory: \"${memory_limits}Mi\"|
+          }
+        }
+      }
+    " "$file"
+  fi
+
+  if [ "$mode" == "unhealthy" ]; then
+    sed "${SED_INPLACE[@]}" "
+      /- name: $container_name/,/^[[:space:]]*- name:/ {
+        /resources:/,/^[[:space:]]*env:/ {
+          /requests:/,/limits:/ {
+            s|cpu: \"[^\"]*\"|cpu: \"${cpu_requests}m\"|
+            s|memory: \"[^\"]*\"|memory: \"${memory_requests}Mi\"|
+          }
+        }
+      }
+    " "$file"
+    
+    sed "${SED_INPLACE[@]}" "
+      /- name: $container_name/,/^[[:space:]]*- name:/ {
+        /resources:/,/^[[:space:]]*env:/ {
+          /limits:/,/^[[:space:]]*env:/ {
+            s|cpu: \"[^\"]*\"|cpu: \"${cpu_limits}m\"|
+            s|memory: \"[^\"]*\"|memory: \"${memory_limits}Mi\"|
+          }
+        }
+      }
+    " "$file"
+  fi
+
+  sed "${SED_INPLACE[@]}" "0,/kind: Deployment/{
+    /kind: Deployment/,/^---/ {
+      /name: $svc/,/^spec:/ {
+        s/(replicas:[[:space:]]*)[0-9]+/\1${replica}/
+      }
+    }
+  }" "$file"
+
+  echo "[APPLY] Applying $file ..."
+  oc apply -f "$file"
 done
 
 echo "[SUCCESS] All updates applied successfully."

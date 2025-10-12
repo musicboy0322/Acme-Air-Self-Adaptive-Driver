@@ -7,10 +7,10 @@ fi
 HOST=$(oc get route acmeair-main-route -n acmeair-group${GROUP} --template='{{ .spec.host }}')
 PORT=80
 
-THREAD=1000
+THREAD=500
 USER=999
-DURATION=600
-RAMP=300
+DURATION=180
+RAMP=120
 DELAY=0
 
 echo HOST=${HOST}

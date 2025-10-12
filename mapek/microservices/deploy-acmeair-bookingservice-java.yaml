@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: acmeair-bookingservice-java
-          image: acmeair-bookingservice-java:latest
+          image: image-registry.openshift-image-registry.svc:5000/acmeair-group6/acmeair-bookingservice-java:latest
           ports:
             - containerPort: 9080
             - containerPort: 9443
