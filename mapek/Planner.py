@@ -146,7 +146,7 @@ class Planner:
         if "memory_low" in unhealthy_metrics:
             new_config["requests"]["memory"] = max(new_config["requests"]["memory"] - 256, self.min_memory)
             new_config["limits"]["memory"] = max(new_config["limits"]["memory"] - 256, self.min_memory)
-            adaptations.append("decrease_cpu")
+            adaptations.append("decrease_memory")
 
         ## Horizontal Scale Up & Scale Down
         # situation of increasing replica
